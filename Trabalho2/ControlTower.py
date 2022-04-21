@@ -9,6 +9,33 @@
 # IMPORTANT: for each successful call to simxStart, there
 # should be a corresponding call to simxFinish at the end!
 
+def TCPserver(host, port, clientID, handleTarget):
+
+    tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_server.bind((host, port))
+    while True:
+        tcp_server.listen()
+        conn, addr = tcp_server.accept()
+        while True:
+            data = conn.recv(1024)
+            if not data:
+                break
+            if(data.decode('utf8') == 'Decolar'):
+                print('Servidor recebeu a mensagem de decolagem')
+                code = -1
+                while (code != 0):
+                    code = sim.simxSetObjectPosition(clientID, handleTarget, -1, (0, 0, 2), sim.simx_opmode_oneshot) 
+                data= 'Sucesso'.encode('utf8')
+            elif(data.decode('utf8') == 'Aterrisar'):
+                print('Servidor recebeu a mensagem de aterrisagem')
+                data= 'Sucesso'.encode('utf8')
+            else:
+                print('Servidor nao recebeu a mensagem correta')
+                data='Erro'.encode('utf8')
+            conn.sendall(data)
+    conn.close()
+
+
 try:
     import sim
 except:
@@ -21,6 +48,7 @@ except:
     print ('')
 
 import time
+import socket
 
 print ('Program started')
 sim.simxFinish(-1) # just in case, close all opened connections
@@ -31,10 +59,8 @@ if clientID!=-1:
     while (code != 0):
         code, handleTarget = sim.simxGetObjectHandle(clientID, "/target", sim.simx_opmode_blocking)
         print(code, handleTarget)
-    code = -1
-    while (code != 0):
-        code = sim.simxSetObjectPosition(clientID, handleTarget, -1, (0, 0, 0), sim.simx_opmode_oneshot) 
-    
+    while True:
+        TCPserver('localhost', 1235, clientID, handleTarget)
 
     # Now send some data to CoppeliaSim in a non-blocking fashion:
     sim.simxAddStatusbarMessage(clientID,'Hello CoppeliaSim!',sim.simx_opmode_oneshot)
