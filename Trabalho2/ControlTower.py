@@ -11,6 +11,19 @@
 
 import pyRTOS
 from random import randint
+try:
+    import sim
+except:
+    print ('--------------------------------------------------------------')
+    print ('"sim.py" could not be imported. This means very probably that')
+    print ('either "sim.py" or the remoteApi library could not be found.')
+    print ('Make sure both are in the same folder as this file,')
+    print ('or appropriately adjust the file "sim.py"')
+    print ('--------------------------------------------------------------')
+    print ('')
+
+import time
+import socket
 
 
 
@@ -58,6 +71,7 @@ drones_start = [1, 2, 3, 4, 5]
 drones_fly = []
 drones_end = []
 ZONE_Z = [1, 2, 3]
+number_drones = 5
 
 def get_target_position(target):
     print(target)
@@ -254,8 +268,7 @@ def task_fly(self):
 
 def emergency_button(self):
     ### Setup code here
-    drones_start = [1, 2, 3]
-    drones_fly = []
+    #sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_streaming)
 
 
     ### End Setup code
@@ -266,21 +279,28 @@ def emergency_button(self):
     # Thread loop
     while True:
         #Se o botao for apertado
-        print("Botao: ")
-        if(input() == 'x'):
+        code, button = sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_buffer)
+        print("BOTAO: ", button)
+        if(button == 1):
             #espera o botao ser apertado novamente
-            if(input() == 'o'):
-                for i in range(len(flight_zone)):
-                    if(flight_zone[i] != 0):
-                        #manda o drone voltar para o inicio
-                        x, y, z = get_target_position(flight_zone[i])
-                        #time.sleep(2)
-                        sim.simxSetObjectPosition(clientID, target_drones[flight_zone[i]], -1, (x, -2, 0.2), sim.simx_opmode_oneshot) 
-                        print("drone voltando: ", flight_zone[i])
-                        flight_zone[i] = 0
+            while(button == 1):
+                code, button = sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_buffer)            
+            for i in range(1, number_drones+1):
+                #manda o drone voltar para o inicio
+                x, y, z = get_target_position(i)
+                #time.sleep(2)
+                sim.simxSetObjectPosition(clientID, target_drones[i], -1, (x, -2, 0.2), sim.simx_opmode_oneshot) 
+                print("drone voltando: ", i)
+                drones_start = [1, 2, 3, 4, 5]
+                drones_end = []
+            for i in range(len(flight_zone)):
+                flight_zone[i] = 0
+
+            time.sleep(5)
 
 
-        yield [pyRTOS.timeout(10)]
+
+        yield [pyRTOS.timeout(0.5)]
 
 
 def task_random_drones(self):
@@ -321,7 +341,7 @@ def task_random_drones(self):
 
 
 
-#pyRTOS.add_task(pyRTOS.Task(emergency_button, priority=1, name="emergency_button", notifications=None, mailbox=True))
+pyRTOS.add_task(pyRTOS.Task(emergency_button, priority=1, name="emergency_button", notifications=None, mailbox=True))
 pyRTOS.add_task(pyRTOS.Task(task_listen_request, priority=1, name="task_listen_request", notifications=None, mailbox=True))
 pyRTOS.add_task(pyRTOS.Task(task_wait_list, priority=3, name="task_wait_list", notifications=None, mailbox=True))
 pyRTOS.add_task(pyRTOS.Task(task_manage_flight_zones, priority=4, name="task_manage_flight_zones", notifications=None, mailbox=True))
@@ -336,33 +356,22 @@ pyRTOS.add_task(pyRTOS.Task(task_random_drones, priority=2, name="task_random_dr
 
 
 
-try:
-    import sim
-except:
-    print ('--------------------------------------------------------------')
-    print ('"sim.py" could not be imported. This means very probably that')
-    print ('either "sim.py" or the remoteApi library could not be found.')
-    print ('Make sure both are in the same folder as this file,')
-    print ('or appropriately adjust the file "sim.py"')
-    print ('--------------------------------------------------------------')
-    print ('')
 
-import time
-import socket
 
 print ('Program started')
 sim.simxFinish(-1) # just in case, close all opened connections
 clientID=sim.simxStart('127.0.0.1',19999,True,True,5000,5) # Connect to CoppeliaSim
 if clientID!=-1:
     print ('Connected to remote API server')
-    number_drones = 5
     target_drones.append(0)
     for i in range((number_drones)):
         code, handleTarget = sim.simxGetObjectHandle(clientID, "/target[{}]".format(i), sim.simx_opmode_blocking)
         print(code, handleTarget)
         target_drones.append(handleTarget)
     print(target_drones)
+    sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_streaming)
     pyRTOS.start()
+    
 
     # Now send some data to CoppeliaSim in a non-blocking fashion:
     sim.simxAddStatusbarMessage(clientID,'Hello CoppeliaSim!',sim.simx_opmode_oneshot)
