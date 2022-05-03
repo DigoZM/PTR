@@ -72,6 +72,11 @@ drones_fly = []
 drones_end = []
 ZONE_Z = [1, 2, 3]
 number_drones = 5
+Execution_times_listen_request = []
+Execution_times_manage_flight_zones = []
+Execution_times_wait_list = []
+Execution_times_fly = []
+Execution_times_emergency_button = []
 
 def get_target_position(target):
     print(target)
@@ -83,8 +88,8 @@ def get_target_position(target):
     
 
 # self is the thread object this runs in
-def task_listen_request(self):
 
+def task_listen_request(self):
     ### Setup code here
 
 
@@ -95,6 +100,7 @@ def task_listen_request(self):
 
     # Thread loop
     while True:
+        start_time = time.time()
 
         # Check messages
         #print("task_listen_request")
@@ -123,8 +129,11 @@ def task_listen_request(self):
 
 
         ### End Work code
-        
+        listen_request_time = time.time()-start_time
+        if(listen_request_time!=0):
+            Execution_times_listen_request.append(listen_request_time)
         yield [pyRTOS.wait_for_message(self), pyRTOS.timeout(0.1)]
+
 
 def task_manage_flight_zones(self):
 
@@ -137,6 +146,7 @@ def task_manage_flight_zones(self):
 
     # Thread loop
     while True:
+        start_time = time.time()
 
         # Check messages
         #print("task_manage_flight_zones")
@@ -197,7 +207,9 @@ def task_manage_flight_zones(self):
 
 
         ### End Work code
-        
+        manage_flight_zones_time = time.time()-start_time
+        if(manage_flight_zones_time!=0.0):
+            Execution_times_manage_flight_zones.append(manage_flight_zones_time)
         yield [pyRTOS.wait_for_message(self), pyRTOS.timeout(1)]
 
 
@@ -211,6 +223,7 @@ def task_wait_list(self):
 
     # Thread loop
     while True:
+        start_time = time.time()
         #print("task_wait_list")
         if(len(wait_list) != 0):
             for i in range(len(flight_zone)):
@@ -225,7 +238,9 @@ def task_wait_list(self):
                     print("Flight Zone: ", flight_zone)
                     free_zone = True
                     break
-
+        wait_list_time = time.time()-start_time
+        if(wait_list_time!=0.0):
+            Execution_times_wait_list.append(wait_list_time)
         yield [pyRTOS.timeout(1)]
 
 def task_fly(self):
@@ -238,6 +253,7 @@ def task_fly(self):
 
     # Thread loop
     while True:
+        start_time = time.time()
         for i in range(len(flight_zone)):
             drone = flight_zone[i]
             signal = 1
@@ -263,7 +279,9 @@ def task_fly(self):
                     sim.simxSetObjectPosition(clientID, target_drones[drone], -1, (x, y+(1*signal), ZONE_Z[i]), sim.simx_opmode_oneshot) 
                     count += 1
                     print("Drone ", flight_zone[i], " pos ", y)
-            
+        fly_time = time.time()-start_time
+        if fly_time!=0.0:
+            Execution_times_fly.append(fly_time)
         yield [pyRTOS.timeout(2.5)]
 
 def emergency_button(self):
@@ -278,6 +296,7 @@ def emergency_button(self):
 
     # Thread loop
     while True:
+        start_time = time.time()
         #Se o botao for apertado
         code, button = sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_buffer)
         print("BOTAO: ", button)
@@ -299,7 +318,9 @@ def emergency_button(self):
             time.sleep(5)
 
 
-
+        emergency_button_time = time.time() -start_time
+        if emergency_button_time !=0.0:
+            Execution_times_emergency_button.append(emergency_button_time)
         yield [pyRTOS.timeout(0.5)]
 
 
@@ -337,7 +358,18 @@ def task_random_drones(self):
 
         yield [pyRTOS.timeout(3)]
         
-        
+def task_print_times(self):
+    yield
+    while True:
+
+        print("-----------------------------------------------")
+        print("MFZ: ",Execution_times_manage_flight_zones)
+        print("WL: ",Execution_times_wait_list)
+        print("Fly: ",Execution_times_fly)
+        print("LR: ",Execution_times_listen_request)
+        print("EB: ",Execution_times_emergency_button)
+        print("-----------------------------------------------")
+        yield[pyRTOS.timeout(1)]
 
 
 
@@ -350,7 +382,7 @@ pyRTOS.add_task(pyRTOS.Task(task_fly, priority=4, name="task_fly", notifications
 
 pyRTOS.add_task(pyRTOS.Task(task_random_drones, priority=2, name="task_random_drones", notifications=None, mailbox=True))
 #pyRTOS.add_service_routine(lambda: print(""))
-
+pyRTOS.add_task(pyRTOS.Task(task_print_times,priority=1,name="task_print_times",notifications=None,mailbox=True))
 
 
 
