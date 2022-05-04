@@ -61,12 +61,14 @@ FLIGHT_REQUEST = 130
 SENT_FLIGHT = 131
 FLIGHT_REQUEST_BACK = 132
 SENT_FLIGHT_BACK = 133
+WAIT_NORMALIZATION = 134
 
 # global variables
 ARRIVAL = 1.5
 flight_zone = [0, 0, 0] # [0, 0, 0] três zonas
 wait_list = []
 target_drones = []
+drones_handle = []
 drones_start = [1, 2, 3, 4, 5]
 drones_fly = []
 drones_end = []
@@ -74,14 +76,21 @@ ZONE_Z = [1, 2, 3]
 number_drones = 5
 
 def get_target_position(target):
-    print(target)
+    #print(target)
     code, (x, y, z) = sim.simxGetObjectPosition(clientID, target_drones[target], -1, sim.simx_opmode_streaming)
     while code != 0:
         code, (x, y, z) = sim.simxGetObjectPosition(clientID, target_drones[target], -1, sim.simx_opmode_buffer)
         #print(code, x, y, z)
     return x, y, z
     
+def get_drone_position(drone):
 
+    code, (x, y, z) = sim.simxGetObjectPosition(clientID, drones_handle[drone], -1, sim.simx_opmode_streaming)
+    while code != 0:
+        code, (x, y, z) = sim.simxGetObjectPosition(clientID, drones_handle[drone], -1, sim.simx_opmode_buffer)
+        #print(code, x, y, z)
+    return x, y, z
+    
 # self is the thread object this runs in
 def task_listen_request(self):
 
@@ -283,25 +292,149 @@ def emergency_button(self):
         print("BOTAO: ", button)
         if(button == 1):
             #espera o botao ser apertado novamente
-            while(button == 1):
-                code, button = sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_buffer)            
-            for i in range(1, number_drones+1):
-                #manda o drone voltar para o inicio
-                x, y, z = get_target_position(i)
-                #time.sleep(2)
-                sim.simxSetObjectPosition(clientID, target_drones[i], -1, (x, -2, 0.2), sim.simx_opmode_oneshot) 
-                print("drone voltando: ", i)
-                drones_start = [1, 2, 3, 4, 5]
-                drones_end = []
-            for i in range(len(flight_zone)):
-                flight_zone[i] = 0
+            self.send(pyRTOS.Message(WAIT_NORMALIZATION, self, "normalization"))
+            # for i in range(1, number_drones+1):
+            #     #manda o drone voltar para o inicio
+            #     x, y, z = get_target_position(i)
+            #     #time.sleep(2)
+            #     sim.simxSetObjectPosition(clientID, target_drones[i], -1, (x, -2, 0.2), sim.simx_opmode_oneshot) 
+            #     print("drone voltando: ", i)
+            #     drones_start = [1, 2, 3, 4, 5]
+            #     drones_end = []
+            # for i in range(len(flight_zone)):
+            #     flight_zone[i] = 0
 
-            time.sleep(5)
+            # time.sleep(5)
 
 
 
         yield [pyRTOS.timeout(0.5)]
 
+
+def normalization(self):
+### Setup code here
+
+
+    ### End Setup code
+
+    # Pass control back to RTOS
+    yield
+
+    # Thread loop
+    while True:
+        normalized = False
+        # Check messages
+        #print("task_listen_request")
+        msgs = self.recv()
+        for msg in msgs:
+
+            ### Handle messages by adding elifs to this
+            if msg.type == WAIT_NORMALIZATION: 
+                code, button = sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_buffer)  
+                while(button == 1):
+                    code, button = sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_buffer)
+                normalized = True
+
+        if(normalized):
+            print(flight_zone)
+            print(drones_end)
+            print(wait_list)
+            # drones_back_emergency = []
+            # for i in range(len(flight_zone)):
+            #     if(flight_zone[i] != 0):
+            #         drones_back_emergency.append(flight_zone[i])
+            # for i in range(len(drones_end)):
+            #     drones_back_emergency.append(drones_end[i])
+            # for i in range(len(wait_list)):
+            #     drones_back_emergency.append(abs(int(wait_list[i])))
+            # print(drones_back_emergency)
+            # for i in range(len(drones_back_emergency)):
+            #     drone = drones_back_emergency[i]
+            #     print( "Voltando: ", drone)
+            #     while(True):
+            #         x, y, z = get_target_position(drone)
+            #         if(y < -ARRIVAL):
+            #             print(drone, " chegou em ", y)
+            #             break
+            #         sim.simxSetObjectPosition(clientID, target_drones[drone], -1, (x, y-1, ZONE_Z[0]), sim.simx_opmode_oneshot)
+            #         posx, posy, posz = get_drone_position(drone)
+            #         print(posx, posy, posz)
+            #         while(abs(abs(posy) - abs(y-1)) > 0.1):
+            #             posx, posy, posz = get_drone_position(drone)
+            
+            for i in range(len(flight_zone)):
+                if(flight_zone[i] != 0):
+                    drone = abs(flight_zone[i])
+                    while(True):
+                        x, y, z = get_target_position(drone)
+                        if(y < -ARRIVAL):
+                            print(drone, " chegou em ", y)
+                            break
+                        sim.simxSetObjectPosition(clientID, target_drones[drone], -1, (x, y-1, ZONE_Z[i]), sim.simx_opmode_oneshot)
+                        flight_zone[i] = 0
+                        posx, posy, posz = get_drone_position(drone)
+                        print(posx, posy, posz)
+                        while(abs(abs(posy) - abs(y-1)) > 0.1):
+                            posx, posy, posz = get_drone_position(drone)
+                        print("chegou:", posy, " ", posz )
+            for i in range(len(drones_end)):
+                drone = drones_end[i]
+                y = 2
+                while(True):
+                    x, y, z = get_target_position(drone)
+                    if(y < -ARRIVAL):
+                        break
+                    sim.simxSetObjectPosition(clientID, target_drones[drone], -1, (x, y-1, ZONE_Z[0]), sim.simx_opmode_oneshot)
+                    posx, posy, posz = get_drone_position(drone)
+                    while(abs(abs(posy) - abs(y-1)) > 0.05):
+                        posx, posy, posz = get_drone_position(drone)
+            for i in range(len(wait_list)):
+                drone = abs(int(wait_list[i]))
+                y = 2
+                while(True):
+                    x, y, z = get_target_position(drone)
+                    if(y < -ARRIVAL):
+                        print(drone, " chegou em ", y)
+                        break
+                    sim.simxSetObjectPosition(clientID, target_drones[drone], -1, (x, y-1, ZONE_Z[0]), sim.simx_opmode_oneshot)
+                    posx, posy, posz = get_drone_position(drone)
+                    while(abs(abs(posy) - abs(y-1)) > 0.05):
+                        posx, posy, posz = get_drone_position(drone)
+            #         #time.sleep(2)#############################################
+            drones_start.clear()
+            drones_start.append(1)
+            drones_start.append(2)
+            drones_start.append(3)
+            drones_start.append(4)
+            drones_start.append(5)
+            drones_end.clear()
+            wait_list.clear()
+            print(drones_start)
+            #drones_end=[]
+            for i in range(len(drones_start)):
+                x, y, z = get_target_position(drones_start[i])
+                sim.simxSetObjectPosition(clientID, target_drones[drones_start[i]], -1, (x, y, 0.2), sim.simx_opmode_oneshot)    
+                posx, posy, posz = get_drone_position(drones_start[i])
+                while(abs(abs(posz) - 0.2) > 0.15):
+                    posx, posy, posz = get_drone_position(drones_start[i])
+      
+
+
+
+                
+
+                
+                
+            ### End Message Handler
+
+        ### Work code here
+        
+
+
+
+        ### End Work code
+        
+        yield [pyRTOS.wait_for_message(self), pyRTOS.timeout(0.07)]    
 
 def task_random_drones(self):
     ### Setup code here
@@ -342,10 +475,11 @@ def task_random_drones(self):
 
 
 pyRTOS.add_task(pyRTOS.Task(emergency_button, priority=1, name="emergency_button", notifications=None, mailbox=True))
-pyRTOS.add_task(pyRTOS.Task(task_listen_request, priority=1, name="task_listen_request", notifications=None, mailbox=True))
+pyRTOS.add_task(pyRTOS.Task(normalization, priority=1, name="normalization", notifications=None, mailbox=True))
+pyRTOS.add_task(pyRTOS.Task(task_listen_request, priority=2, name="task_listen_request", notifications=None, mailbox=True))
 pyRTOS.add_task(pyRTOS.Task(task_wait_list, priority=3, name="task_wait_list", notifications=None, mailbox=True))
 pyRTOS.add_task(pyRTOS.Task(task_manage_flight_zones, priority=4, name="task_manage_flight_zones", notifications=None, mailbox=True))
-pyRTOS.add_task(pyRTOS.Task(task_fly, priority=4, name="task_fly", notifications=None, mailbox=True))
+pyRTOS.add_task(pyRTOS.Task(task_fly, priority=5, name="task_fly", notifications=None, mailbox=True))
 
 
 pyRTOS.add_task(pyRTOS.Task(task_random_drones, priority=2, name="task_random_drones", notifications=None, mailbox=True))
@@ -364,10 +498,13 @@ clientID=sim.simxStart('127.0.0.1',19999,True,True,5000,5) # Connect to Coppelia
 if clientID!=-1:
     print ('Connected to remote API server')
     target_drones.append(0)
+    drones_handle.append(0)
     for i in range((number_drones)):
         code, handleTarget = sim.simxGetObjectHandle(clientID, "/target[{}]".format(i), sim.simx_opmode_blocking)
+        code, droneHandle = sim.simxGetObjectHandle(clientID, "/Quadcopter[{}]".format(i), sim.simx_opmode_blocking)
         print(code, handleTarget)
         target_drones.append(handleTarget)
+        drones_handle.append(droneHandle)
     print(target_drones)
     sim.simxGetInt32Signal(clientID, "myButton", sim.simx_opmode_streaming)
     pyRTOS.start()
