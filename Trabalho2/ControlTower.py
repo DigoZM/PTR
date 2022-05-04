@@ -369,6 +369,24 @@ def task_print_times(self):
         print("LR: ",Execution_times_listen_request)
         print("EB: ",Execution_times_emergency_button)
         print("-----------------------------------------------")
+        Tempos=open("Tempos.txt","w")
+        Tempos.write("Mange_Flight_Zones:\n-------------------\n")
+        for x in Execution_times_manage_flight_zones:
+            Tempos.write(str(x) + "\n")
+        Tempos.write("Wait_list:\n-------------------\n")
+        for x in Execution_times_wait_list:
+            Tempos.write(str(x) + "\n")
+        Tempos.write("Fly:\n-------------------\n")
+        for x in Execution_times_fly:
+            Tempos.write(str(x) + "\n")
+        Tempos.write("Listen:\n-------------------\n")
+        for x in Execution_times_listen_request:
+            Tempos.write(str(x) + "\n")
+        Tempos.write("Button:\n-------------------\n")
+        for x in Execution_times_emergency_button:
+            Tempos.write(str(x) + "\n")
+
+        Tempos.close()
         yield[pyRTOS.timeout(1)]
 
 
